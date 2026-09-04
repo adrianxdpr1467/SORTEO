@@ -1,0 +1,1919 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sorteo de Caps · Panel del streamer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&dRisplay=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-database-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.20.0/matter.min.js"></script>
+<style>
+  :root{
+    --ink:#12101c;
+    --ink-2:#181428;
+    --panel:#1d1832;
+    --panel-2:#241d3d;
+    --line: rgba(245,241,255,0.08);
+    --flame:#ff5a36;
+    --flame-dim: rgba(255,90,54,0.16);
+    --teal:#2fe6c4;
+    --teal-dim: rgba(47,230,196,0.16);
+    --text:#f5f1ff;
+    --muted:#938da9;
+    --danger:#ff5a7a;
+    --radius-wheel: 28px;
+    --radius-panel: 6px;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    min-height:100vh;
+    background:
+      radial-gradient(1100px 600px at 15% -10%, rgba(255,90,54,0.14), transparent 60%),
+      radial-gradient(900px 700px at 110% 10%, rgba(47,230,196,0.10), transparent 55%),
+      var(--ink);
+    color:var(--text);
+    font-family:'Manrope', sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{ font-family:'Archivo Black', sans-serif; font-weight:400; letter-spacing:0.2px; margin:0; }
+  button{ font-family:inherit; cursor:pointer; }
+  input{ font-family:inherit; }
+  .hidden{ display:none !important; }
+  .mono{ font-family:'JetBrains Mono', monospace; }
+
+  /* ---------- Lock / setup screens ---------- */
+  .lock-screen{
+    position:fixed; inset:0; z-index:50;
+    display:flex; align-items:center; justify-content:center;
+    background:
+      radial-gradient(900px 500px at 20% 0%, rgba(255,90,54,0.16), transparent 55%),
+      radial-gradient(700px 500px at 100% 100%, rgba(47,230,196,0.12), transparent 55%),
+      var(--ink);
+    padding:24px;
+  }
+  .lock-card{
+    width:100%; max-width:400px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:18px;
+    padding:36px 32px 32px;
+    box-shadow:0 30px 80px rgba(0,0,0,0.45);
+  }
+  .lock-kicker{ color:var(--flame); font-size:13px; font-weight:700; margin-bottom:10px; }
+  .lock-title{ font-size:26px; line-height:1.15; margin-bottom:6px; }
+  .lock-sub{ color:var(--muted); font-size:14px; margin-bottom:26px; }
+  .lock-tabs{ display:flex; border:1px solid var(--line); border-radius:10px; overflow:hidden; margin-bottom:22px; }
+  .tab-btn{
+    flex:1; padding:11px 0; background:transparent; border:none; color:var(--muted);
+    font-weight:700; font-size:14px; transition:background .15s, color .15s;
+  }
+  .tab-btn.active{ background:var(--flame); color:#1a0f0a; }
+  .lock-form{ display:flex; flex-direction:column; gap:14px; }
+  .field-label{ font-size:13px; color:var(--muted); font-weight:600; }
+  .lock-form input{
+    background:var(--ink-2); border:1px solid var(--line); border-radius:10px;
+    padding:12px 14px; color:var(--text); font-size:15px; outline:none;
+  }
+  .lock-form input:focus{ border-color:var(--flame); }
+  .btn-submit{
+    margin-top:6px; background:var(--flame); color:#1a0f0a; border:none;
+    border-radius:10px; padding:13px 0; font-weight:800; font-size:15px;
+    transition:transform .1s;
+  }
+  .btn-submit:active{ transform:scale(0.98); }
+  .lock-error{ color:var(--danger); font-size:13px; min-height:16px; }
+  .lock-hint{ margin-top:18px; font-size:12px; color:var(--muted); line-height:1.5; border-top:1px solid var(--line); padding-top:14px; }
+  .setup-list{ margin:0 0 16px; padding-left:18px; color:var(--muted); font-size:13px; line-height:1.7; }
+  .setup-list code{ color:var(--teal); background:var(--ink-2); padding:1px 5px; border-radius:4px; }
+
+  /* ---------- App shell ---------- */
+  .app{ min-height:100vh; padding:22px 26px 60px; max-width:1280px; margin:0 auto; }
+  .app-header{
+    display:flex; align-items:center; justify-content:space-between; gap:16px;
+    padding-bottom:20px; margin-bottom:24px; border-bottom:1px solid var(--line);
+    flex-wrap:wrap;
+  }
+  .brand{ display:flex; align-items:baseline; gap:10px; }
+  .brand h1{ font-size:22px; }
+  .brand span{ color:var(--muted); font-size:13px; font-weight:600; }
+  .header-actions{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .btn-add-user{
+    background:var(--flame); color:#1a0f0a; border:none; border-radius:10px;
+    padding:11px 18px; font-weight:800; font-size:14px;
+  }
+  .btn-ghost-nav{
+    background:transparent; border:1px solid var(--teal-dim); color:var(--teal);
+    border-radius:10px; padding:10px 16px; font-weight:800; font-size:14px;
+  }
+  .btn-ghost-nav:hover{ background:var(--teal-dim); }
+  .connection-status{ display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); }
+  .connection-dot{ width:8px; height:8px; border-radius:50%; background:#4a4560; flex-shrink:0; }
+  .connection-dot.online{ background:var(--teal); box-shadow:0 0 6px rgba(47,230,196,.7); }
+  .connection-dot.offline{ background:var(--danger); }
+  .role-badge{
+    font-size:12px; font-weight:700; padding:7px 12px; border-radius:20px;
+    border:1px solid var(--line); color:var(--muted);
+  }
+  .role-badge.admin{ color:var(--flame); border-color: var(--flame-dim); background:var(--flame-dim); }
+  .role-badge.viewer{ color:var(--teal); border-color: var(--teal-dim); background:var(--teal-dim); }
+  .btn-logout{
+    background:transparent; border:1px solid var(--line); color:var(--muted);
+    border-radius:10px; padding:10px 14px; font-size:13px; font-weight:700;
+  }
+  .btn-logout:hover{ color:var(--text); border-color:var(--text); }
+
+  /* ---------- View transitions ---------- */
+  .view-screen{ opacity:0; transform:translateY(18px); transition:opacity .4s ease, transform .4s ease; }
+  .view-screen.view-visible{ opacity:1; transform:translateY(0); }
+
+  .app-main{
+    display:grid; grid-template-columns: 1fr 320px; gap:22px; align-items:start;
+  }
+  @media (max-width: 880px){
+    .app-main{ grid-template-columns: 1fr; }
+  }
+
+  /* ---------- Wheel card ---------- */
+  .wheel-card{
+    background:var(--panel); border:1px solid var(--line); border-radius:var(--radius-wheel);
+    padding:30px; display:flex; flex-direction:column; align-items:center;
+  }
+  .wheel-card h2{ font-size:18px; align-self:flex-start; margin-bottom:2px; }
+  .wheel-card .section-note{ align-self:flex-start; color:var(--muted); font-size:13px; margin-bottom:20px; }
+  .wheel-wrap{ position:relative; width:100%; max-width:400px; margin:0 auto; }
+  .wheel-wrap canvas{ width:100%; height:auto; display:block; }
+  .wheel-pointer{
+    position:absolute; top:-6px; left:50%; transform:translateX(-50%);
+    width:0; height:0; border-left:14px solid transparent; border-right:14px solid transparent;
+    border-top:22px solid var(--flame); filter:drop-shadow(0 2px 4px rgba(0,0,0,.4)); z-index:3;
+  }
+  .wheel-controls{ width:100%; max-width:400px; margin-top:26px; }
+  .winner-count-row{ display:flex; align-items:center; gap:8px; margin-bottom:16px; }
+  .count-btn{
+    background:var(--ink-2); border:1px solid var(--line); color:var(--text);
+    border-radius:9px; padding:9px 16px; font-weight:700; font-size:14px;
+  }
+  .count-btn.active{ background:var(--teal); border-color:var(--teal); color:#052420; }
+  .count-custom{
+    flex:1; background:var(--ink-2); border:1px solid var(--line); color:var(--text);
+    border-radius:9px; padding:9px 12px; font-size:14px; min-width:0;
+  }
+  .btn-spin{
+    width:100%; background:var(--flame); color:#1a0f0a; border:none; border-radius:12px;
+    padding:15px 0; font-weight:800; font-size:16px; letter-spacing:0.3px;
+  }
+  .btn-spin:disabled{ opacity:0.5; cursor:not-allowed; }
+  .viewer-lock-note{
+    color:var(--muted); font-size:13px; text-align:center; padding:14px; border:1px dashed var(--line);
+    border-radius:10px; width:100%; max-width:400px; margin-top:18px;
+  }
+  .results-panel{ width:100%; max-width:400px; margin-top:18px; display:flex; flex-direction:column; gap:8px; }
+  .result-item{
+    background:var(--teal-dim); border:1px solid rgba(47,230,196,0.35); color:var(--teal);
+    border-radius:9px; padding:10px 14px; font-weight:700; font-size:14px;
+  }
+
+  /* ---------- Sidebar ---------- */
+  .sidebar{ display:flex; flex-direction:column; gap:16px; }
+  .panel-block{
+    background:var(--panel); border:1px solid var(--line); border-left:3px solid var(--flame);
+    border-radius:var(--radius-panel); padding:18px 20px;
+  }
+  .panel-block.viewers-block{ border-left-color: var(--teal); flex:1; display:flex; flex-direction:column; min-height:260px; }
+  .panel-block h3{ font-size:13px; color:var(--muted); font-weight:700; margin-bottom:12px; }
+  .caps-row{ display:flex; align-items:center; gap:12px; }
+  .caps-input{
+    width:74px; background:var(--ink-2); border:1px solid var(--line); color:var(--flame);
+    border-radius:8px; padding:8px 10px; font-size:20px; font-weight:800; text-align:center;
+    font-family:'Archivo Black', sans-serif;
+  }
+  .caps-input:disabled{ color:var(--text); opacity:0.85; }
+  .caps-unit{ color:var(--muted); font-size:13px; }
+  .viewers-head-row{ display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; gap:8px; }
+  .toggle-codes-btn{
+    background:transparent; border:1px solid var(--line); color:var(--muted);
+    border-radius:7px; padding:5px 10px; font-size:11px; font-weight:700; white-space:nowrap;
+  }
+  .toggle-codes-btn:hover{ color:var(--text); border-color:var(--text); }
+  .online-count{ font-size:12px; color:var(--teal); font-weight:700; display:block; margin-bottom:6px; }
+  #viewersList{ list-style:none; margin:10px 0 0; padding:0; overflow-y:auto; flex:1; max-height:420px; }
+  .viewer-item{
+    display:flex; align-items:center; gap:10px; padding:9px 4px; border-bottom:1px solid var(--line);
+    font-size:14px;
+  }
+  .viewer-item:last-child{ border-bottom:none; }
+  .status-dot{ width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+  .status-dot.online{ background:var(--teal); box-shadow:0 0 8px rgba(47,230,196,0.7); }
+  .status-dot.offline{ background:#4a4560; }
+  .viewer-name{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .viewer-code{ color:var(--muted); font-size:12px; letter-spacing:0.5px; }
+  .empty-note{ color:var(--muted); font-size:13px; padding:16px 4px; text-align:center; }
+
+  .viewer-avatar-wrap{ position:relative; width:28px; height:28px; flex-shrink:0; border-radius:50%; }
+  .viewer-avatar{
+    width:28px; height:28px; border-radius:50%; object-fit:cover; display:block;
+    border:1px solid var(--line);
+  }
+  .viewer-avatar-fallback{
+    width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    color:#fff; font-weight:800; font-size:12px; font-family:'Manrope', sans-serif;
+  }
+  .viewer-avatar-wrap.editable{ cursor:pointer; }
+  .avatar-edit-badge{
+    position:absolute; bottom:-2px; right:-2px; width:14px; height:14px; border-radius:50%;
+    background:var(--flame); color:#1a0f0a; font-size:9px; display:flex; align-items:center; justify-content:center;
+    border:2px solid var(--panel);
+  }
+  .viewer-delete-btn{
+    background:transparent; border:none; color:var(--muted); font-size:14px; padding:4px 6px;
+    border-radius:6px; flex-shrink:0; line-height:1;
+  }
+  .viewer-delete-btn:hover{ color:var(--danger); background:rgba(255,90,122,0.12); }
+
+  .toast-container{
+    position:fixed; top:18px; right:18px; z-index:80; display:flex; flex-direction:column; gap:10px;
+    max-width:320px;
+  }
+  .toast{
+    background:var(--panel); border:1px solid var(--flame-dim); border-left:3px solid var(--flame);
+    color:var(--text); padding:12px 14px; border-radius:10px; font-size:13px; line-height:1.4;
+    box-shadow:0 12px 30px rgba(0,0,0,0.4); animation:toastIn .2s ease-out;
+  }
+  @keyframes toastIn{ from{ opacity:0; transform:translateX(20px);} to{ opacity:1; transform:translateX(0);} }
+
+  /* ---------- Modals ---------- */
+  .modal-backdrop{
+    position:fixed; inset:0; background:rgba(10,8,18,0.7); backdrop-filter:blur(3px);
+    display:flex; align-items:center; justify-content:center; z-index:60; padding:20px;
+    overflow-y:auto;
+  }
+  .modal-box{
+    background:var(--panel); border:1px solid var(--line); border-radius:16px;
+    padding:28px; width:100%; max-width:380px; margin:auto;
+  }
+  .modal-box h3{ font-size:18px; margin-bottom:6px; }
+  .modal-box p{ color:var(--muted); font-size:13px; margin:0 0 18px; line-height:1.5; }
+  .modal-box input{
+    width:100%; background:var(--ink-2); border:1px solid var(--line); color:var(--text);
+    border-radius:10px; padding:12px 14px; font-size:15px; outline:none; margin-bottom:14px;
+  }
+  .modal-actions{ display:flex; gap:10px; margin-top:6px; }
+  .modal-actions button{ flex:1; border-radius:10px; padding:11px 0; font-weight:700; font-size:14px; border:none; }
+  .btn-cancel{ background:transparent; border:1px solid var(--line) !important; color:var(--muted); }
+  .btn-confirm{ background:var(--flame); color:#1a0f0a; }
+  .code-display{
+    background:var(--ink-2); border:1px dashed var(--flame); border-radius:10px;
+    padding:16px; text-align:center; margin-bottom:16px;
+  }
+  .code-display .code-name{ color:var(--muted); font-size:13px; margin-bottom:6px; }
+  .code-display .code-value{ font-family:'JetBrains Mono', monospace; font-size:24px; font-weight:700; color:var(--flame); letter-spacing:2px; }
+
+  /* ---------- Minigames hub ---------- */
+  .minigames-layout{ display:grid; grid-template-columns: 110px 1fr; gap:24px; align-items:start; max-width:1000px; margin:0 auto; }
+  @media (max-width: 640px){ .minigames-layout{ grid-template-columns: 1fr; } }
+  .mg-sidebar{
+    background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:16px 8px;
+    display:flex; flex-direction:column; align-items:center; gap:16px; max-height:72vh; overflow-y:auto;
+  }
+  .mg-sidebar h3{ font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; }
+  .mg-avatar-list{ display:flex; flex-direction:column; gap:16px; align-items:center; width:100%; }
+  .mg-avatar-col{ display:flex; flex-direction:column; align-items:center; gap:5px; }
+  .mg-avatar-col .viewer-avatar, .mg-avatar-col .viewer-avatar-fallback{ width:42px; height:42px; font-size:15px; }
+  .mg-caps-badge{ background:var(--flame-dim); color:var(--flame); font-size:11px; font-weight:800; padding:2px 8px; border-radius:10px; }
+  .mg-main{ display:flex; flex-direction:column; gap:18px; padding-top:4px; }
+  .mg-card{
+    background:var(--panel); border:1px solid var(--line); border-radius:20px; padding:26px 28px;
+    text-align:left; color:var(--text); transition:border-color .15s;
+  }
+  .mg-card:hover{ border-color:var(--flame); }
+  .mg-card-title{ font-family:'Archivo Black',sans-serif; font-size:19px; margin-bottom:8px; }
+  .mg-card-sub{ color:var(--muted); font-size:13px; line-height:1.55; }
+
+  .mg-prize-inputs{ margin-bottom:6px; }
+  .mg-prize-row{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    background:var(--ink-2); border:1px solid var(--line); border-radius:9px; padding:8px 12px; margin-bottom:8px; font-size:13px;
+  }
+  .mg-prize-row input{
+    width:64px; background:var(--panel); border:1px solid var(--line); color:var(--flame);
+    border-radius:7px; padding:6px 8px; text-align:center; font-weight:800; font-family:'Archivo Black',sans-serif; margin:0;
+  }
+  .mg-total-row{ font-size:13px; color:var(--muted); margin:8px 0 4px; }
+  .mg-total-row strong{ color:var(--flame); font-size:16px; }
+
+  /* ---------- Game screens (pinball / chat stop) ---------- */
+  .mg-game-wrap{
+    max-width:600px; margin:0 auto; background:var(--panel); border:1px solid var(--line);
+    border-radius:28px; padding:30px; display:flex; flex-direction:column; align-items:center;
+  }
+  .mg-game-wrap h2{ font-size:20px; align-self:flex-start; }
+  .mg-game-wrap .section-note{ align-self:flex-start; color:var(--muted); font-size:13px; margin:4px 0 18px; }
+  .pinball-canvas-wrap{ width:100%; max-width:520px; }
+  .pinball-canvas-wrap canvas{ width:100%; height:auto; display:block; border-radius:16px; background:#0d0b16; }
+
+  .cs-timer{ font-family:'Archivo Black',sans-serif; font-size:46px; color:var(--flame); margin:6px 0 18px; letter-spacing:1px; }
+  .cs-chat-box{
+    width:100%; height:270px; overflow-y:auto; background:var(--ink-2); border:1px solid var(--line);
+    border-radius:12px; padding:10px 12px; display:flex; flex-direction:column; gap:5px; margin-bottom:14px;
+  }
+  .cs-msg{ font-size:13px; line-height:1.5; word-break:break-word; }
+  .cs-msg .cs-user{ font-weight:800; margin-right:6px; }
+  .cs-input-row{ display:flex; gap:8px; width:100%; margin-bottom:12px; }
+  .cs-input-row input{
+    flex:1; background:var(--ink-2); border:1px solid var(--line); color:var(--text);
+    border-radius:9px; padding:10px 12px; font-size:14px; margin:0;
+  }
+  .cs-input-row button{
+    background:var(--flame); color:#1a0f0a; border:none; border-radius:9px; padding:0 18px; font-weight:800;
+  }
+  .cs-input-row button:disabled, .cs-input-row input:disabled{ opacity:0.4; cursor:not-allowed; }
+</style>
+</head>
+<body>
+
+  <div id="toastContainer" class="toast-container" aria-live="polite"></div>
+  <input type="file" id="avatarFileInput" accept="image/*,image/gif" class="hidden">
+
+  <!-- ===== SETUP SCREEN (se muestra si falta configurar Firebase) ===== -->
+  <div id="setupScreen" class="lock-screen hidden">
+    <div class="lock-card">
+      <div class="lock-kicker">CONFIGURACIÓN REQUERIDA</div>
+      <div class="lock-title">Falta conectar Firebase</div>
+      <div class="lock-sub">Para que el sorteo funcione entre distintos dispositivos, pega la configuración de tu proyecto de Firebase dentro del archivo.</div>
+      <ol class="setup-list">
+        <li>Abre <code>index.html</code> con un editor de texto.</li>
+        <li>Busca el bloque <code>FIREBASE_CONFIG</code> al inicio del <code>&lt;script&gt;</code>.</li>
+        <li>Reemplaza los valores <code>"TU_..."</code> por los de tu proyecto (los obtienes en la consola de Firebase).</li>
+        <li>Guarda el archivo y vuelve a abrirlo.</li>
+      </ol>
+      <div class="lock-hint">Sigue la guía que te dieron en el chat para crear el proyecto de Firebase paso a paso.</div>
+    </div>
+  </div>
+
+  <!-- ===== LOCK SCREEN ===== -->
+  <div id="lockScreen" class="lock-screen hidden">
+    <div class="lock-card">
+      <div class="lock-kicker">SORTEO DE CAPS</div>
+      <div class="lock-title">Entra para ver el sorteo</div>
+      <div class="lock-sub">Pide tu nombre y código al streamer, o entra con el código de administrador.</div>
+
+      <div class="lock-tabs">
+        <button class="tab-btn active" data-tab="viewer" type="button">Espectador</button>
+        <button class="tab-btn" data-tab="admin" type="button">Administrador</button>
+      </div>
+
+      <form id="viewerForm" class="lock-form">
+        <div>
+          <div class="field-label">Nombre</div>
+          <input type="text" id="viewerNameInput" autocomplete="off" required>
+        </div>
+        <div>
+          <div class="field-label">Código</div>
+          <input type="text" id="viewerCodeInput" autocomplete="off" required style="text-transform:uppercase">
+        </div>
+        <button type="submit" class="btn-submit">Entrar como espectador</button>
+        <div class="lock-error" id="viewerError"></div>
+      </form>
+
+      <form id="adminForm" class="lock-form hidden">
+        <div>
+          <div class="field-label">Código de administrador</div>
+          <input type="text" id="adminCodeInput" autocomplete="off" required style="text-transform:uppercase">
+        </div>
+        <button type="submit" class="btn-submit">Entrar como administrador</button>
+        <div class="lock-error" id="adminError"></div>
+      </form>
+
+      <div class="lock-hint">Los espectadores solo pueden mirar el sorteo en curso. El administrador agrega espectadores, edita la cantidad de caps y gira la ruleta.</div>
+    </div>
+  </div>
+
+  <!-- ===== APP ===== -->
+  <div id="app" class="app hidden">
+    <header class="app-header">
+      <div class="brand">
+        <h1>Sorteo de Caps</h1>
+        <span id="headerSub">Panel en vivo</span>
+      </div>
+      <div class="header-actions">
+        <button id="addUserBtn" class="btn-add-user hidden" type="button">+ Agregar espectador</button>
+        <button id="minigamesNavBtn" class="btn-ghost-nav hidden" type="button">🎮 Minijuegos</button>
+        <span class="connection-status"><span id="connectionDot" class="connection-dot"></span><span id="connectionLabel">Conectando…</span></span>
+        <span id="roleBadge" class="role-badge"></span>
+        <button id="logoutBtn" class="btn-logout" type="button">Salir</button>
+      </div>
+    </header>
+
+    <!-- ===== PANTALLA: SORTEO (ruleta) ===== -->
+    <div id="raffleScreen" class="view-screen">
+      <main class="app-main">
+        <section class="wheel-card">
+          <h2>Ruleta de espectadores</h2>
+          <div class="section-note">Gira para elegir a quién le toca el cap.</div>
+
+          <div class="wheel-wrap">
+            <div class="wheel-pointer"></div>
+            <canvas id="wheelCanvas" width="420" height="420"></canvas>
+          </div>
+
+          <div id="adminWheelControls" class="wheel-controls hidden">
+            <div class="winner-count-row">
+              <button class="count-btn active" data-count="1" type="button">1 ganador</button>
+              <button class="count-btn" data-count="2" type="button">2 ganadores</button>
+              <input type="number" id="customCount" class="count-custom" min="1" placeholder="Varios">
+            </div>
+            <button id="spinBtn" class="btn-spin" type="button">Girar la ruleta</button>
+          </div>
+
+          <div id="viewerWheelNote" class="viewer-lock-note hidden">Esperando a que el administrador gire la ruleta…</div>
+
+          <div id="resultsPanel" class="results-panel"></div>
+        </section>
+
+        <aside class="sidebar">
+          <div class="panel-block">
+            <h3>Caps a sortear</h3>
+            <div class="caps-row">
+              <input type="number" id="capsInput" class="caps-input" min="1" value="1">
+              <span class="caps-unit">episodios en juego</span>
+            </div>
+          </div>
+
+          <div class="panel-block viewers-block">
+            <div class="viewers-head-row">
+              <h3>Espectadores</h3>
+              <button id="toggleCodesBtn" class="toggle-codes-btn hidden" type="button">Mostrar códigos</button>
+            </div>
+            <div id="onlineCount" class="online-count">0 conectados</div>
+            <ul id="viewersList"></ul>
+          </div>
+        </aside>
+      </main>
+    </div>
+
+    <!-- ===== PANTALLA: HUB DE MINIJUEGOS ===== -->
+    <div id="minigamesHubScreen" class="view-screen hidden">
+      <div class="minigames-layout">
+        <aside class="mg-sidebar">
+          <h3>Espectadores</h3>
+          <div id="mgAvatarList" class="mg-avatar-list"></div>
+        </aside>
+        <div class="mg-main">
+          <button id="mgCardPinball" class="mg-card" type="button">
+            <div class="mg-card-title">🎱 Pinball de la suerte</div>
+            <div class="mg-card-sub">Esto es solo para que lo vean los espectadores — el minijuego será completamente aleatorio, nadie lo controla.</div>
+          </button>
+          <button id="mgCardChatstop" class="mg-card" type="button">
+            <div class="mg-card-title">💬 Chat Stop</div>
+            <div class="mg-card-sub">Acá los espectadores también participan: tienen que escribir en el chat hasta que el tiempo se acabe.</div>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== PANTALLA: PINBALL ===== -->
+    <div id="pinballScreen" class="view-screen hidden">
+      <div class="mg-game-wrap">
+        <h2>🎱 Pinball de la suerte</h2>
+        <div class="section-note" id="pinballNote">Preparando el tablero…</div>
+        <div class="pinball-canvas-wrap">
+          <canvas id="pinballCanvas" width="560" height="640"></canvas>
+        </div>
+        <button id="pinballStartBtn" class="btn-spin hidden" type="button" style="margin-top:18px;">Lanzar las bolas</button>
+        <div id="pinballResults" class="results-panel"></div>
+      </div>
+    </div>
+
+    <!-- ===== PANTALLA: CHAT STOP ===== -->
+    <div id="chatstopScreen" class="view-screen hidden">
+      <div class="mg-game-wrap" style="max-width:520px;">
+        <h2>💬 Chat Stop</h2>
+        <div class="section-note" id="csNote">Preparando…</div>
+        <div class="cs-timer" id="csTimer">--:--</div>
+        <div class="cs-chat-box" id="csChatBox"></div>
+        <div id="csInputRow" class="cs-input-row hidden">
+          <input type="text" id="csMessageInput" placeholder="Escribe tu mensaje…" autocomplete="off" maxlength="140">
+          <button id="csSendBtn" type="button">Enviar</button>
+        </div>
+        <div id="csSpectatorNote" class="viewer-lock-note hidden">Solo estás mirando este minijuego.</div>
+        <button id="csStartBtn" class="btn-spin hidden" type="button">Iniciar cronómetro</button>
+        <div id="csResults" class="results-panel"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MODALES ===== -->
+  <div id="addUserModal" class="modal-backdrop hidden">
+    <div class="modal-box">
+      <h3>Agregar espectador</h3>
+      <p>Escribe el nombre. Se generará un código único que deberás compartirle para que pueda entrar.</p>
+      <input type="text" id="newUserNameInput" placeholder="Nombre del espectador" autocomplete="off">
+      <div class="modal-actions">
+        <button class="btn-cancel" id="cancelAddUser" type="button">Cancelar</button>
+        <button class="btn-confirm" id="confirmAddUser" type="button">Generar código</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="codeModal" class="modal-backdrop hidden">
+    <div class="modal-box">
+      <h3>Espectador agregado</h3>
+      <p>Comparte este nombre y código con la persona para que pueda entrar como espectador.</p>
+      <div class="code-display">
+        <div class="code-name" id="codeModalName"></div>
+        <div class="code-value mono" id="codeModalCode"></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-confirm" id="closeCodeModal" type="button" style="flex:none; width:100%;">Listo</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="mgConfigModal" class="modal-backdrop hidden">
+    <div class="modal-box" style="max-width:420px;">
+      <h3 id="mgConfigTitle">Configurar minijuego</h3>
+      <p>Elige quién participa, cuántos ganadores habrá y cuántos caps se lleva cada uno.</p>
+
+      <div class="field-label" style="margin-bottom:8px;">¿Quién participa?</div>
+      <div class="lock-tabs" style="margin-bottom:8px;">
+        <button class="tab-btn active" id="mgModeAll" type="button">Todos los espectadores</button>
+        <button class="tab-btn" id="mgModeRoulette" type="button">Los de la ruleta</button>
+      </div>
+      <div id="mgModeNote" style="color:var(--muted); font-size:12px; margin-bottom:16px; line-height:1.5;"></div>
+
+      <div class="field-label" style="margin-bottom:8px;">Ganadores</div>
+      <div class="winner-count-row">
+        <button class="count-btn active" data-count="1" type="button">1</button>
+        <button class="count-btn" data-count="2" type="button">2</button>
+        <input type="number" id="mgCustomCount" class="count-custom" min="1" placeholder="Varios">
+      </div>
+
+      <div class="field-label" style="margin:14px 0 8px;">Caps por ganador</div>
+      <div id="mgPrizeInputs" class="mg-prize-inputs"></div>
+
+      <div class="mg-total-row">Cantidad de caps sorteados: <strong id="mgTotalCaps">0</strong></div>
+
+      <div class="modal-actions" style="margin-top:14px;">
+        <button class="btn-cancel" id="mgConfigCancel" type="button">Cancelar</button>
+        <button class="btn-confirm" id="mgConfigConfirm" type="button">Iniciar minijuego</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ======================================================================
+  // 1) CONFIGURA AQUÍ TU PROYECTO DE FIREBASE
+  //    Reemplaza estos valores con los que te da la consola de Firebase
+  //    (Configuración del proyecto > Tus apps > Config del SDK).
+  // ======================================================================
+  var FIREBASE_CONFIG = {
+    apiKey: "AIzaSyC8DSf7rjXHYGgYx2HluFLhghXJPeoW2z8",
+    authDomain: "sorteo-f71f6.firebaseapp.com",
+    databaseURL: "https://sorteo-f71f6-default-rtdb.firebaseio.com",
+    projectId: "sorteo-f71f6",
+    storageBucket: "sorteo-f71f6.firebasestorage.app",
+    messagingSenderId: "513138013838",
+    appId: "1:513138013838:web:0c5c31b62cc715ebcd3bdf",
+  };
+  // Ruta dentro de la base de datos donde vive todo el sorteo.
+  var ROOT_PATH = 'animeRaffle';
+  // ======================================================================
+
+  var ADMIN_CODE = 'ADMIN-9X4K7P';
+  var SESSION_KEY = 'animeRaffleSession_v1';
+  var CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  var WHEEL_COLORS = ['#ff5a36','#ffb236','#2fe6c4','#5aa9ff','#c86bff','#ff6b9d','#7ee787','#ffd23f'];
+  var STEP_DURATION_MS = 4200;
+  var MAX_AVATAR_BYTES = 1.5 * 1024 * 1024;
+
+  function secureRandom(){
+    if(window.crypto && window.crypto.getRandomValues){
+      var buf = new Uint32Array(1);
+      window.crypto.getRandomValues(buf);
+      return buf[0] / 4294967296;
+    }
+    return Math.random();
+  }
+
+  // Fisher-Yates shuffle using a cryptographically secure random source —
+  // gives a truly uniform permutation, so every viewer has an equal chance.
+  function shuffleArray(arr){
+    var a = arr.slice();
+    for(var i = a.length - 1; i > 0; i--){
+      var j = Math.floor(secureRandom() * (i+1));
+      var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+    }
+    return a;
+  }
+
+  function generateCode(len){
+    len = len || 6;
+    var code = '';
+    for(var i=0;i<len;i++) code += CODE_CHARS[Math.floor(secureRandom()*CODE_CHARS.length)];
+    return code;
+  }
+  function uid(){ return 'v_' + Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+  function escapeHtml(str){
+    return String(str).replace(/[&<>"']/g, function(c){
+      return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+    });
+  }
+  function truncate(str, n){ return str.length > n ? str.slice(0,n-1)+'…' : str; }
+  function colorForName(name){
+    name = name || '';
+    var hash = 0;
+    for(var i=0;i<name.length;i++){ hash = name.charCodeAt(i) + ((hash<<5)-hash); }
+    var hue = Math.abs(hash) % 360;
+    return 'hsl('+hue+', 60%, 42%)';
+  }
+  function pad2(n){ return (n<10?'0':'')+n; }
+
+  function getSession(){
+    try{ return JSON.parse(sessionStorage.getItem(SESSION_KEY)); }catch(e){ return null; }
+  }
+  function setSession(s){ sessionStorage.setItem(SESSION_KEY, JSON.stringify(s)); }
+  function clearSession(){ sessionStorage.removeItem(SESSION_KEY); }
+
+  // ---- In-memory mirror of the Firebase data ----
+  var state = { capsCount: 1, viewers: {}, draw: null, lastSessionKick: null, currentView:'raffle', pinball:null, chatstop:null };
+  var session = getSession();
+
+  function viewersArray(){
+    var out = [];
+    var vs = state.viewers || {};
+    Object.keys(vs).forEach(function(id){
+      var v = vs[id] || {};
+      out.push({
+        id: id, name: v.name || '', code: v.code || '', online: !!v.online,
+        lastSeen: v.lastSeen || 0, avatar: v.avatar || null,
+        activeSessionToken: v.activeSessionToken || null,
+        capsWon: v.capsWon || 0
+      });
+    });
+    return out;
+  }
+  function isViewerOnline(v){ return !!v.online; }
+
+  // ---- DOM refs ----
+  var setupScreen = document.getElementById('setupScreen');
+  var lockScreen = document.getElementById('lockScreen');
+  var app = document.getElementById('app');
+  var viewerForm = document.getElementById('viewerForm');
+  var adminForm = document.getElementById('adminForm');
+  var tabBtns = document.querySelectorAll('.tab-btn');
+  var viewerError = document.getElementById('viewerError');
+  var adminError = document.getElementById('adminError');
+
+  var addUserBtn = document.getElementById('addUserBtn');
+  var minigamesNavBtn = document.getElementById('minigamesNavBtn');
+  var roleBadge = document.getElementById('roleBadge');
+  var logoutBtn = document.getElementById('logoutBtn');
+  var capsInput = document.getElementById('capsInput');
+  var viewersList = document.getElementById('viewersList');
+  var onlineCountEl = document.getElementById('onlineCount');
+  var toggleCodesBtn = document.getElementById('toggleCodesBtn');
+  var codesVisible = false;
+  var connectionDot = document.getElementById('connectionDot');
+  var connectionLabel = document.getElementById('connectionLabel');
+
+  var adminWheelControls = document.getElementById('adminWheelControls');
+  var viewerWheelNote = document.getElementById('viewerWheelNote');
+  var spinBtn = document.getElementById('spinBtn');
+  var countBtns = document.querySelectorAll('#adminWheelControls .count-btn');
+  var customCount = document.getElementById('customCount');
+  var resultsPanel = document.getElementById('resultsPanel');
+
+  var addUserModal = document.getElementById('addUserModal');
+  var newUserNameInput = document.getElementById('newUserNameInput');
+  var codeModal = document.getElementById('codeModal');
+  var codeModalName = document.getElementById('codeModalName');
+  var codeModalCode = document.getElementById('codeModalCode');
+
+  var canvas = document.getElementById('wheelCanvas');
+  var ctx = canvas.getContext('2d');
+  var currentRotation = 0;
+  var animId = null;
+
+  var toastContainer = document.getElementById('toastContainer');
+  var avatarFileInput = document.getElementById('avatarFileInput');
+  var pendingAvatarViewerId = null;
+
+  function showToast(message){
+    var el = document.createElement('div');
+    el.className = 'toast';
+    el.textContent = message;
+    toastContainer.appendChild(el);
+    setTimeout(function(){
+      el.style.transition = 'opacity .3s';
+      el.style.opacity = '0';
+      setTimeout(function(){ el.remove(); }, 300);
+    }, 5000);
+  }
+
+  // ======================================================================
+  // FIREBASE CONNECTION
+  // ======================================================================
+  var db = null, rootRef = null;
+  var firstSnapshot = true;
+  var lastSeenKickEventId = null;
+  var lastDrawKey = null;
+  var lastPinballStatus = null;
+  var currentOnDisconnectViewerId = null;
+
+  function isConfigured(){
+    return FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey.indexOf('TU_') !== 0;
+  }
+
+  function drawKey(d){ return d ? (d.stepIndex + ':' + d.status) : null; }
+
+  function registerOnDisconnect(viewerId){
+    if(!rootRef) return;
+    currentOnDisconnectViewerId = viewerId;
+    var ref = rootRef.child('viewers/'+viewerId);
+    ref.onDisconnect().update({ online:false, lastSeen: firebase.database.ServerValue.TIMESTAMP });
+    ref.update({ online:true, lastSeen: firebase.database.ServerValue.TIMESTAMP });
+  }
+  function cancelOnDisconnect(){
+    if(rootRef && currentOnDisconnectViewerId){
+      rootRef.child('viewers/'+currentOnDisconnectViewerId).onDisconnect().cancel();
+    }
+    currentOnDisconnectViewerId = null;
+  }
+
+  function initFirebase(){
+    if(!isConfigured()){
+      setupScreen.classList.remove('hidden');
+      return;
+    }
+    firebase.initializeApp(FIREBASE_CONFIG);
+    db = firebase.database();
+    rootRef = db.ref(ROOT_PATH);
+
+    db.ref('.info/connected').on('value', function(snap){
+      var connected = snap.val() === true;
+      connectionDot.className = 'connection-dot ' + (connected ? 'online' : 'offline');
+      connectionLabel.textContent = connected ? 'Conectado' : 'Conectando…';
+      if(connected && session && session.role === 'viewer'){
+        registerOnDisconnect(session.viewerId);
+      }
+    });
+
+    rootRef.on('value', function(snapshot){
+      var val = snapshot.val() || {};
+      state.capsCount = (typeof val.capsCount === 'number') ? val.capsCount : 1;
+      state.viewers = val.viewers || {};
+      state.draw = val.draw || null;
+      state.lastSessionKick = val.lastSessionKick || null;
+      state.currentView = val.currentView || 'raffle';
+      state.pinball = val.pinball || null;
+      state.chatstop = val.chatstop || null;
+
+      if(firstSnapshot){
+        firstSnapshot = false;
+        lastSeenKickEventId = state.lastSessionKick ? state.lastSessionKick.eventId : null;
+        lastDrawKey = drawKey(state.draw);
+        lastPinballStatus = state.pinball ? state.pinball.status : null;
+        checkSessionValidity();
+        render();
+        return;
+      }
+
+      checkSessionValidity();
+      checkForKickNotification();
+
+      var newDrawKey = drawKey(state.draw);
+      var drawChanged = newDrawKey !== lastDrawKey;
+      lastDrawKey = newDrawKey;
+
+      var newPbStatus = state.pinball ? state.pinball.status : null;
+      var pbBecameRunning = newPbStatus === 'running' && lastPinballStatus !== 'running';
+      lastPinballStatus = newPbStatus;
+
+      render();
+
+      if(drawChanged && (!session || session.role !== 'admin')){
+        if(!state.draw){
+          resultsPanel.innerHTML = '';
+        }else if(state.draw.status === 'spinning'){
+          animateCurrentStep();
+        }
+      }
+      if(pbBecameRunning && state.pinball.runData){
+        runPinballLocally(state.pinball.runData);
+      }
+    });
+  }
+
+  // ---------------- Lock screen tabs ----------------
+  tabBtns.forEach(function(btn){
+    if(btn.closest('#mgConfigModal')) return;
+    btn.addEventListener('click', function(){
+      tabBtns.forEach(function(b){ if(!b.closest('#mgConfigModal')) b.classList.remove('active'); });
+      btn.classList.add('active');
+      var tab = btn.getAttribute('data-tab');
+      viewerForm.classList.toggle('hidden', tab !== 'viewer');
+      adminForm.classList.toggle('hidden', tab !== 'admin');
+      viewerError.textContent = '';
+      adminError.textContent = '';
+    });
+  });
+
+  viewerForm.addEventListener('submit', function(e){
+    e.preventDefault();
+    if(!rootRef){ viewerError.textContent = 'Todavía no se configuró Firebase.'; return; }
+    var name = document.getElementById('viewerNameInput').value.trim();
+    var code = document.getElementById('viewerCodeInput').value.trim().toUpperCase();
+    var match = viewersArray().filter(function(v){
+      return v.name.toLowerCase() === name.toLowerCase() && v.code === code;
+    })[0];
+    if(!match){
+      viewerError.textContent = 'Nombre o código incorrecto. Pídeselo al administrador.';
+      return;
+    }
+    var newToken = uid() + secureRandom().toString(36).slice(2,8);
+    var viewerRef = rootRef.child('viewers/'+match.id);
+    var wasActiveFlag = false;
+    viewerRef.transaction(function(current){
+      if(current === null) return current;
+      wasActiveFlag = !!current.activeSessionToken && !!current.online;
+      current.activeSessionToken = newToken;
+      current.online = true;
+      current.lastSeen = Date.now();
+      return current;
+    }, function(error, committed, snapshot){
+      if(error){
+        viewerError.textContent = 'No se pudo conectar. Intenta de nuevo.';
+        return;
+      }
+      if(!committed || !snapshot.val()){
+        viewerError.textContent = 'Ese usuario ya no existe. Pide un código nuevo.';
+        return;
+      }
+      if(wasActiveFlag){
+        rootRef.child('lastSessionKick').set({ viewerName: match.name, eventId: uid(), at: Date.now() });
+      }
+      setSession({ role:'viewer', viewerId: match.id, sessionToken: newToken });
+      session = getSession();
+      viewerError.textContent = '';
+      registerOnDisconnect(match.id);
+      render();
+    });
+  });
+
+  adminForm.addEventListener('submit', function(e){
+    e.preventDefault();
+    var code = document.getElementById('adminCodeInput').value.trim().toUpperCase();
+    if(code !== ADMIN_CODE){
+      adminError.textContent = 'Código de administrador incorrecto.';
+      return;
+    }
+    setSession({ role:'admin' });
+    session = getSession();
+    adminError.textContent = '';
+    render();
+  });
+
+  logoutBtn.addEventListener('click', function(){
+    if(session && session.role === 'viewer' && rootRef){
+      rootRef.child('viewers/'+session.viewerId).update({ online:false, lastSeen: Date.now() });
+      cancelOnDisconnect();
+    }
+    clearSession();
+    session = null;
+    cancelAnimationFrame(animId);
+    render();
+  });
+
+  function forceLogout(message){
+    cancelOnDisconnect();
+    clearSession();
+    session = null;
+    cancelAnimationFrame(animId);
+    render();
+    if(message){ alert(message); }
+  }
+
+  // If this viewer's name+code is used to log in from another tab/device,
+  // this checks whether our session token got replaced and logs us out.
+  function checkSessionValidity(){
+    if(!session || session.role !== 'viewer') return;
+    var v = state.viewers && state.viewers[session.viewerId];
+    if(!v || v.activeSessionToken !== session.sessionToken){
+      forceLogout('Tu sesión se cerró porque este usuario inició sesión en otra pestaña o dispositivo.');
+    }
+  }
+
+  // Shows a toast to admins when a viewer's active session got replaced
+  // because they logged in again from another tab/device.
+  function checkForKickNotification(){
+    if(!session || session.role !== 'admin') return;
+    var kick = state.lastSessionKick;
+    if(kick && kick.eventId !== lastSeenKickEventId){
+      lastSeenKickEventId = kick.eventId;
+      showToast('⚠️ ' + kick.viewerName + ' inició sesión en otra pestaña — se cerró su sesión anterior.');
+    }
+  }
+
+  // ---------------- Show/hide codes (admin only, local to this tab) ----------------
+  toggleCodesBtn.addEventListener('click', function(){
+    if(!session || session.role !== 'admin') return;
+    codesVisible = !codesVisible;
+    toggleCodesBtn.textContent = codesVisible ? 'Ocultar códigos' : 'Mostrar códigos';
+    renderViewersList();
+  });
+
+  // ---------------- Delete viewer (admin only) ----------------
+  function deleteViewer(viewerId){
+    if(!rootRef) return;
+    var v = state.viewers && state.viewers[viewerId];
+    if(!v) return;
+    if(!confirm('¿Eliminar a "' + v.name + '"? Perderá su acceso y su código dejará de funcionar.')) return;
+    rootRef.child('viewers/'+viewerId).remove();
+  }
+
+  // ---------------- Avatar upload (each viewer edits their own) ----------------
+  avatarFileInput.addEventListener('change', function(){
+    var file = avatarFileInput.files && avatarFileInput.files[0];
+    avatarFileInput.value = '';
+    if(!file || !pendingAvatarViewerId || !rootRef) return;
+    if(!/^image\//.test(file.type)){ alert('Elige una imagen o un GIF.'); return; }
+    if(file.size > MAX_AVATAR_BYTES){ alert('Esa imagen pesa demasiado. Usa una de menos de 1.5MB.'); return; }
+    var targetId = pendingAvatarViewerId;
+    var reader = new FileReader();
+    reader.onload = function(){
+      rootRef.child('viewers/'+targetId+'/avatar').set(reader.result);
+      pendingAvatarViewerId = null;
+    };
+    reader.onerror = function(){ alert('No se pudo leer la imagen.'); pendingAvatarViewerId = null; };
+    reader.readAsDataURL(file);
+  });
+
+  // Delegated clicks inside the viewers list: editing your own avatar, or an admin deleting someone.
+  viewersList.addEventListener('click', function(e){
+    var avatarWrap = e.target.closest('.viewer-avatar-wrap.editable');
+    if(avatarWrap){
+      pendingAvatarViewerId = avatarWrap.getAttribute('data-viewer-id');
+      avatarFileInput.click();
+      return;
+    }
+    var delBtn = e.target.closest('.viewer-delete-btn');
+    if(delBtn){ deleteViewer(delBtn.getAttribute('data-viewer-id')); }
+  });
+
+  // ---------------- Add user ----------------
+  addUserBtn.addEventListener('click', function(){
+    newUserNameInput.value = '';
+    addUserModal.classList.remove('hidden');
+    newUserNameInput.focus();
+  });
+  document.getElementById('cancelAddUser').addEventListener('click', function(){
+    addUserModal.classList.add('hidden');
+  });
+  document.getElementById('confirmAddUser').addEventListener('click', function(){
+    var name = newUserNameInput.value.trim();
+    if(!name || !rootRef) return;
+    var exists = viewersArray().some(function(v){ return v.name.toLowerCase() === name.toLowerCase(); });
+    if(exists){ alert('Ya existe un espectador con ese nombre.'); return; }
+    var code = generateCode();
+    var id = uid();
+    rootRef.child('viewers/'+id).set({ name:name, code:code, online:false, lastSeen:0, avatar:null, activeSessionToken:null, capsWon:0 });
+    addUserModal.classList.add('hidden');
+    codeModalName.textContent = name;
+    codeModalCode.textContent = code;
+    codeModal.classList.remove('hidden');
+  });
+  document.getElementById('closeCodeModal').addEventListener('click', function(){
+    codeModal.classList.add('hidden');
+  });
+  newUserNameInput.addEventListener('keydown', function(e){
+    if(e.key === 'Enter'){ document.getElementById('confirmAddUser').click(); }
+  });
+
+  // ---------------- Caps count ----------------
+  capsInput.addEventListener('change', function(){
+    if(!session || session.role !== 'admin' || !rootRef) return;
+    var val = Math.max(1, parseInt(capsInput.value,10) || 1);
+    rootRef.child('capsCount').set(val);
+    capsInput.value = val;
+  });
+
+  // ---------------- Winner count selector (raffle wheel) ----------------
+  countBtns.forEach(function(btn){
+    btn.addEventListener('click', function(){
+      countBtns.forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      customCount.value = '';
+    });
+  });
+  customCount.addEventListener('input', function(){
+    if(customCount.value){ countBtns.forEach(function(b){ b.classList.remove('active'); }); }
+  });
+  function getSelectedWinnerCount(){
+    if(customCount.value && parseInt(customCount.value,10) > 0) return parseInt(customCount.value,10);
+    var active = document.querySelector('#adminWheelControls .count-btn.active');
+    return active ? parseInt(active.getAttribute('data-count'),10) : 1;
+  }
+
+  // ---------------- Wheel drawing ----------------
+  function pointerAngle(){ return (3*Math.PI)/2; }
+  function angleForIndex(n, i){ var seg = (Math.PI*2)/n; return i*seg + seg/2; }
+
+  function drawWheel(names, rotation){
+    var cx = canvas.width/2, cy = canvas.height/2, r = Math.min(cx,cy)-8;
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    var n = names.length;
+    if(n === 0){
+      ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fillStyle = '#241d3d'; ctx.fill();
+      ctx.strokeStyle = 'rgba(245,241,255,0.1)'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = '#938da9'; ctx.font = '600 15px Manrope'; ctx.textAlign = 'center';
+      ctx.fillText('Agrega espectadores para empezar', cx, cy);
+      return;
+    }
+    var seg = (Math.PI*2)/n;
+    ctx.save();
+    ctx.translate(cx,cy);
+    ctx.rotate(rotation);
+    for(var i=0;i<n;i++){
+      var start = i*seg, end = start+seg;
+      ctx.beginPath();
+      ctx.moveTo(0,0);
+      ctx.arc(0,0,r,start,end);
+      ctx.closePath();
+      ctx.fillStyle = WHEEL_COLORS[i % WHEEL_COLORS.length];
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(18,16,28,0.5)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.save();
+      ctx.rotate(start + seg/2);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#12101c';
+      ctx.font = '800 14px Manrope';
+      ctx.fillText(truncate(names[i], 15), r-16, 5);
+      ctx.restore();
+    }
+    ctx.restore();
+    ctx.beginPath(); ctx.arc(cx,cy,28,0,Math.PI*2);
+    ctx.fillStyle = '#1d1832'; ctx.fill();
+    ctx.strokeStyle = 'rgba(245,241,255,0.15)'; ctx.lineWidth = 2; ctx.stroke();
+  }
+
+  function spinToIndex(names, winnerIndex, onDone){
+    var n = names.length;
+    var seg = (Math.PI*2)/n;
+    var jitter = (secureRandom()-0.5) * seg * 0.6;
+    var targetMod = ((pointerAngle() - angleForIndex(n, winnerIndex) - jitter) % (Math.PI*2) + Math.PI*2) % (Math.PI*2);
+    var startRot = currentRotation;
+    var startMod = ((startRot % (Math.PI*2)) + Math.PI*2) % (Math.PI*2);
+    var delta = targetMod - startMod;
+    if(delta < 0) delta += Math.PI*2;
+    var extraSpins = 5;
+    var totalDelta = delta + extraSpins*Math.PI*2;
+    var t0 = null;
+    cancelAnimationFrame(animId);
+    function frame(now){
+      if(t0 === null) t0 = now;
+      var elapsed = now - t0;
+      var p = Math.min(1, elapsed/STEP_DURATION_MS);
+      var eased = 1 - Math.pow(1-p, 3);
+      currentRotation = startRot + totalDelta*eased;
+      drawWheel(names, currentRotation);
+      if(p < 1){
+        animId = requestAnimationFrame(frame);
+      }else{
+        currentRotation = startRot + totalDelta;
+        drawWheel(names, currentRotation);
+        onDone && onDone();
+      }
+    }
+    animId = requestAnimationFrame(frame);
+  }
+
+  // ---------------- Draw / raffle orchestration ----------------
+  function currentPoolIds(){
+    var d = state.draw;
+    if(!d) return viewersArray().map(function(v){ return v.id; });
+    var revealed = d.winnerIds.slice(0, d.stepIndex);
+    return d.poolIds.filter(function(id){ return revealed.indexOf(id) === -1; });
+  }
+  function namesForIds(ids){
+    return ids.map(function(id){
+      var v = state.viewers[id];
+      return v ? v.name : '???';
+    });
+  }
+
+  function startDraw(numWinners){
+    if(!rootRef) return;
+    if(state.draw && state.draw.status === 'spinning') return;
+    var pool = viewersArray();
+    if(pool.length === 0){ alert('Todavía no hay espectadores para sortear.'); return; }
+    var n = Math.max(1, Math.min(numWinners, pool.length));
+    var shuffled = shuffleArray(pool);
+    var winners = shuffled.slice(0, n);
+    resultsPanel.innerHTML = '';
+    var draw = {
+      status: 'spinning',
+      poolIds: pool.map(function(v){ return v.id; }),
+      winnerIds: winners.map(function(v){ return v.id; }),
+      stepIndex: 0,
+      stepStartTime: Date.now()
+    };
+    state.draw = draw;
+    spinBtn.disabled = true;
+    rootRef.child('draw').set(draw);
+    animateCurrentStep();
+  }
+
+  function animateCurrentStep(){
+    var d = state.draw;
+    if(!d || d.status !== 'spinning') return;
+    var poolIds = currentPoolIds();
+    var poolNames = namesForIds(poolIds);
+    var winnerId = d.winnerIds[d.stepIndex];
+    var winnerIdx = poolIds.indexOf(winnerId);
+    if(winnerIdx === -1) return;
+    spinToIndex(poolNames, winnerIdx, function(){
+      addResult(d.stepIndex+1, poolNames[winnerIdx]);
+      if(session && session.role === 'admin'){ advanceDraw(); }
+    });
+  }
+
+  function advanceDraw(){
+    var d = state.draw;
+    if(!d || !rootRef) return;
+    if(d.stepIndex + 1 < d.winnerIds.length){
+      setTimeout(function(){
+        if(!state.draw) return;
+        state.draw.stepIndex += 1;
+        state.draw.stepStartTime = Date.now();
+        rootRef.child('draw').update({ stepIndex: state.draw.stepIndex, stepStartTime: state.draw.stepStartTime });
+        animateCurrentStep();
+      }, 1300);
+    }else{
+      state.draw.status = 'done';
+      rootRef.child('draw').update({ status:'done' });
+      spinBtn.disabled = false;
+    }
+  }
+
+  function addResult(place, name){
+    var div = document.createElement('div');
+    div.className = 'result-item';
+    div.textContent = '🏆 Ganador ' + place + ': ' + name;
+    resultsPanel.appendChild(div);
+  }
+
+  spinBtn.addEventListener('click', function(){
+    if(!session || session.role !== 'admin') return;
+    startDraw(getSelectedWinnerCount());
+  });
+
+  // ======================================================================
+  // VIEW NAVIGATION (sorteo <-> hub de minijuegos <-> minijuego)
+  // ======================================================================
+  var lastViewSeen = null;
+  function viewScreenEl(name){
+    if(name === 'minigames_hub') return document.getElementById('minigamesHubScreen');
+    if(name === 'pinball') return document.getElementById('pinballScreen');
+    if(name === 'chatstop') return document.getElementById('chatstopScreen');
+    return document.getElementById('raffleScreen');
+  }
+  function switchView(name){
+    var target = viewScreenEl(name);
+    document.querySelectorAll('.view-screen').forEach(function(el){
+      if(el !== target){ el.classList.add('hidden'); el.classList.remove('view-visible'); }
+    });
+    target.classList.remove('hidden');
+    target.classList.remove('view-visible');
+    void target.offsetWidth; // force reflow so the transition plays
+    requestAnimationFrame(function(){ target.classList.add('view-visible'); });
+  }
+
+  minigamesNavBtn.addEventListener('click', function(){
+    if(!session || session.role !== 'admin' || !rootRef) return;
+    var target = (state.currentView === 'raffle') ? 'minigames_hub' : 'raffle';
+    rootRef.child('currentView').set(target);
+  });
+
+  // ======================================================================
+  // MINIGAMES HUB
+  // ======================================================================
+  var mgAvatarList = document.getElementById('mgAvatarList');
+  var mgCardPinball = document.getElementById('mgCardPinball');
+  var mgCardChatstop = document.getElementById('mgCardChatstop');
+
+  function renderMinigamesHub(){
+    mgAvatarList.innerHTML = '';
+    var list = viewersArray();
+    if(list.length === 0){
+      var empty = document.createElement('div');
+      empty.className = 'empty-note';
+      empty.textContent = 'No hay espectadores todavía.';
+      mgAvatarList.appendChild(empty);
+      return;
+    }
+    list.forEach(function(v){
+      var col = document.createElement('div');
+      col.className = 'mg-avatar-col';
+      var avatarInner = v.avatar
+        ? '<img class="viewer-avatar" src="'+v.avatar+'" alt="">'
+        : '<span class="viewer-avatar-fallback" style="background:'+colorForName(v.name)+'">'+escapeHtml((v.name.trim()[0]||'?').toUpperCase())+'</span>';
+      col.innerHTML = '<div class="mg-caps-badge">'+ v.capsWon +'</div><span class="viewer-avatar-wrap" title="'+escapeHtml(v.name)+'">'+avatarInner+'</span>';
+      mgAvatarList.appendChild(col);
+    });
+  }
+
+  // ---------------- Shared minigame config modal ----------------
+  var mgConfigModal = document.getElementById('mgConfigModal');
+  var mgConfigTitle = document.getElementById('mgConfigTitle');
+  var mgModeAllBtn = document.getElementById('mgModeAll');
+  var mgModeRouletteBtn = document.getElementById('mgModeRoulette');
+  var mgModeNoteEl = document.getElementById('mgModeNote');
+  var mgCustomCount = document.getElementById('mgCustomCount');
+  var mgCountBtns = document.querySelectorAll('#mgConfigModal .count-btn');
+  var mgPrizeInputsEl = document.getElementById('mgPrizeInputs');
+  var mgTotalCapsEl = document.getElementById('mgTotalCaps');
+  var mgConfigGameType = null;
+  var mgParticipantMode = 'all';
+
+  function openMgConfig(type){
+    if(!session || session.role !== 'admin') return;
+    mgConfigGameType = type;
+    mgConfigTitle.textContent = type === 'pinball' ? 'Configurar: Pinball de la suerte' : 'Configurar: Chat Stop';
+    mgParticipantMode = 'all';
+    updateMgModeButtons();
+    mgCountBtns.forEach(function(b,i){ b.classList.toggle('active', i===0); });
+    mgCustomCount.value = '';
+    renderPrizeInputs();
+    mgConfigModal.classList.remove('hidden');
+  }
+  mgCardPinball.addEventListener('click', function(){ openMgConfig('pinball'); });
+  mgCardChatstop.addEventListener('click', function(){ openMgConfig('chatstop'); });
+  document.getElementById('mgConfigCancel').addEventListener('click', function(){ mgConfigModal.classList.add('hidden'); });
+
+  mgModeAllBtn.addEventListener('click', function(){ mgParticipantMode='all'; updateMgModeButtons(); });
+  mgModeRouletteBtn.addEventListener('click', function(){ mgParticipantMode='roulette'; updateMgModeButtons(); });
+  function updateMgModeButtons(){
+    mgModeAllBtn.classList.toggle('active', mgParticipantMode==='all');
+    mgModeRouletteBtn.classList.toggle('active', mgParticipantMode==='roulette');
+    if(mgParticipantMode === 'roulette'){
+      if(state.draw && state.draw.status === 'done'){
+        mgModeNoteEl.textContent = 'Participarán los ' + state.draw.winnerIds.length + ' ganadores del último sorteo de la ruleta.';
+      }else{
+        mgModeNoteEl.textContent = '⚠️ Todavía no hay un resultado guardado de la ruleta.';
+      }
+    }else{
+      mgModeNoteEl.textContent = 'Participarán los ' + viewersArray().length + ' espectadores agregados.';
+    }
+  }
+
+  mgCountBtns.forEach(function(btn){
+    btn.addEventListener('click', function(){
+      mgCountBtns.forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      mgCustomCount.value = '';
+      renderPrizeInputs();
+    });
+  });
+  mgCustomCount.addEventListener('input', function(){
+    if(mgCustomCount.value){ mgCountBtns.forEach(function(b){ b.classList.remove('active'); }); }
+    renderPrizeInputs();
+  });
+  function getMgWinnerCount(){
+    if(mgCustomCount.value && parseInt(mgCustomCount.value,10) > 0) return parseInt(mgCustomCount.value,10);
+    var active = document.querySelector('#mgConfigModal .count-btn.active');
+    return active ? parseInt(active.getAttribute('data-count'),10) : 1;
+  }
+  function renderPrizeInputs(){
+    var n = Math.max(1, getMgWinnerCount());
+    mgPrizeInputsEl.innerHTML = '';
+    for(var i=1;i<=n;i++){
+      var row = document.createElement('div');
+      row.className = 'mg-prize-row';
+      row.innerHTML = '<span>🏆 Top '+i+'</span><input type="number" min="0" class="mg-prize-input" data-rank="'+i+'" value="1">';
+      mgPrizeInputsEl.appendChild(row);
+    }
+    updateMgTotal();
+  }
+  mgPrizeInputsEl.addEventListener('input', updateMgTotal);
+  function updateMgTotal(){
+    var total = 0;
+    document.querySelectorAll('.mg-prize-input').forEach(function(inp){ total += Math.max(0, parseInt(inp.value,10)||0); });
+    mgTotalCapsEl.textContent = total;
+  }
+
+  document.getElementById('mgConfigConfirm').addEventListener('click', function(){
+    if(!session || session.role !== 'admin' || !rootRef) return;
+    var eligibleIds;
+    if(mgParticipantMode === 'roulette'){
+      if(!state.draw || state.draw.status !== 'done'){ alert('Todavía no hay un resultado de la ruleta.'); return; }
+      eligibleIds = state.draw.winnerIds.slice();
+    }else{
+      eligibleIds = viewersArray().map(function(v){ return v.id; });
+    }
+    if(eligibleIds.length === 0){ alert('No hay participantes elegibles.'); return; }
+    var n = getMgWinnerCount();
+    if(n > eligibleIds.length){ alert('No puede haber más ganadores que participantes ('+eligibleIds.length+').'); return; }
+    var prizes = [];
+    document.querySelectorAll('.mg-prize-input').forEach(function(inp){ prizes.push(Math.max(0, parseInt(inp.value,10)||0)); });
+    var total = prizes.reduce(function(a,b){ return a+b; }, 0);
+    if(total > state.capsCount){ alert('No hay suficientes caps en la bolsa (quedan '+state.capsCount+').'); return; }
+
+    var config = { participantMode: mgParticipantMode, eligibleIds: eligibleIds, winnerCount: n, prizes: prizes, capsWagered: total };
+    mgConfigModal.classList.add('hidden');
+
+    if(mgConfigGameType === 'pinball'){
+      rootRef.child('pinball').set({ status:'idle', config: config, runData:null });
+      rootRef.child('currentView').set('pinball');
+    }else{
+      rootRef.child('chatstop').set({ status:'idle', config: config, messages:null, winnerIds:null, remainingMs:0, rateMultiplier:1 });
+      rootRef.child('currentView').set('chatstop');
+    }
+  });
+
+  // Applies prize caps to winners (by rank) and subtracts the total from the shared pool.
+  function applyMinigameResults(rankedWinnerIds, config){
+    if(!rootRef || !config) return;
+    var updates = {};
+    var totalGiven = 0;
+    rankedWinnerIds.forEach(function(id, i){
+      var prize = config.prizes[i] || 0;
+      totalGiven += prize;
+      var current = (state.viewers[id] && state.viewers[id].capsWon) || 0;
+      updates['viewers/'+id+'/capsWon'] = current + prize;
+    });
+    updates['capsCount'] = Math.max(0, state.capsCount - totalGiven);
+    rootRef.update(updates);
+  }
+
+  // ======================================================================
+  // MINIJUEGO 1: PINBALL (física real con Matter.js, resultado 100% aleatorio)
+  //
+  // El ganador se decide con el mismo mezclador aleatorio seguro que usa la
+  // ruleta (Fisher-Yates + crypto). La física de Matter.js corre de verdad
+  // (rebotes, empujones de los bumpers, etc.) y solo se usa una fuerza suave
+  // que guía cada bola hacia SU carril ya asignado una vez que sale del campo
+  // de clavos, para garantizar que el número de ganadores anunciado sea
+  // siempre exactamente el configurado.
+  // ======================================================================
+  var pinballCanvas = document.getElementById('pinballCanvas');
+  var pctx = pinballCanvas.getContext('2d');
+  var pinballStartBtn = document.getElementById('pinballStartBtn');
+  var pinballNote = document.getElementById('pinballNote');
+  var pinballResults = document.getElementById('pinballResults');
+
+  var PB_W = 560, PB_H = 640;
+  var PB_PEG_TOP = 70, PB_PEG_BOTTOM = 380;
+  var PB_TUNNEL_TOP = 390, PB_FLOOR_Y = 520, PB_POCKET_Y = 585;
+
+  var pbEngine = null, pbWorld = null, pbBalls = [], pbPegs = [], pbAnimId = null;
+  var pbCorridorCount = 0, pbCorridorWidth = 0, pbOpenSet = {}, pbFramesRun = 0;
+  var pbAvatarImgCache = {};
+
+  function getAvatarImg(src){
+    if(!src) return null;
+    if(!pbAvatarImgCache[src]){
+      var img = new Image();
+      img.src = src;
+      pbAvatarImgCache[src] = img;
+    }
+    return pbAvatarImgCache[src];
+  }
+
+  function drawPinballIdlePreview(){
+    pctx.clearRect(0,0,PB_W,PB_H);
+    pctx.fillStyle = '#0d0b16'; pctx.fillRect(0,0,PB_W,PB_H);
+    pctx.fillStyle = '#938da9'; pctx.font = '600 15px Manrope'; pctx.textAlign = 'center';
+    pctx.fillText('El tablero se arma al lanzar las bolas', PB_W/2, PB_H/2);
+  }
+
+  function buildPinballBoard(n, openCount){
+    pbEngine = Matter.Engine.create();
+    pbEngine.gravity.y = 1;
+    pbWorld = pbEngine.world;
+    pbBalls = []; pbPegs = [];
+    pbCorridorCount = n;
+    pbCorridorWidth = (PB_W - 40) / n;
+
+    Matter.World.add(pbWorld, [
+      Matter.Bodies.rectangle(10, PB_H/2, 20, PB_H, {isStatic:true}),
+      Matter.Bodies.rectangle(PB_W-10, PB_H/2, 20, PB_H, {isStatic:true})
+    ]);
+
+    var rows = 7, cols = 8;
+    var rowGap = (PB_PEG_BOTTOM - PB_PEG_TOP) / (rows-1);
+    var colGap = (PB_W - 60) / (cols-1);
+    var bumperIdx = {};
+    var totalCells = rows*cols;
+    while(Object.keys(bumperIdx).length < Math.min(5, totalCells)){
+      bumperIdx[Math.floor(secureRandom()*totalCells)] = true;
+    }
+    var k = 0;
+    for(var r=0;r<rows;r++){
+      var offset = (r % 2 === 0) ? 0 : colGap/2;
+      for(var c=0;c<cols;c++){
+        var x = 30 + c*colGap + offset;
+        var y = PB_PEG_TOP + r*rowGap;
+        if(x >= 20 && x <= PB_W-20){
+          var isBumper = !!bumperIdx[k];
+          var peg = Matter.Bodies.circle(x, y, isBumper?13:5, {
+            isStatic:true, restitution: isBumper?1.1:0.5, friction:0.02,
+            label: isBumper?'bumper':'peg'
+          });
+          Matter.World.add(pbWorld, peg);
+          pbPegs.push(peg);
+        }
+        k++;
+      }
+    }
+
+    for(var i=0;i<=n;i++){
+      var dx = 20 + i*pbCorridorWidth;
+      var div = Matter.Bodies.rectangle(dx, (PB_TUNNEL_TOP+PB_POCKET_Y)/2, 4, PB_POCKET_Y-PB_TUNNEL_TOP, {isStatic:true, label:'divider'});
+      Matter.World.add(pbWorld, div);
+    }
+
+    var indices = [];
+    for(var i2=0;i2<n;i2++) indices.push(i2);
+    var openIdxList = shuffleArray(indices).slice(0, openCount);
+    pbOpenSet = {};
+    openIdxList.forEach(function(idx){ pbOpenSet[idx] = true; });
+
+    for(var ci=0; ci<n; ci++){
+      var cx0 = 20 + ci*pbCorridorWidth, cx1 = cx0+pbCorridorWidth;
+      var midx = (cx0+cx1)/2;
+      if(pbOpenSet[ci]){
+        Matter.World.add(pbWorld, Matter.Bodies.rectangle(midx, PB_POCKET_Y, pbCorridorWidth-6, 10, {isStatic:true, label:'floor-open'}));
+      }else{
+        Matter.World.add(pbWorld, Matter.Bodies.rectangle(midx, PB_FLOOR_Y, pbCorridorWidth-6, 10, {isStatic:true, label:'floor-closed'}));
+      }
+    }
+
+    Matter.Events.on(pbEngine, 'collisionStart', function(evt){
+      evt.pairs.forEach(function(pair){
+        var a=pair.bodyA, b=pair.bodyB;
+        var bump = a.label==='bumper' ? a : (b.label==='bumper'? b:null);
+        var ball = a.label==='ball' ? a : (b.label==='ball'? b:null);
+        if(bump && ball){
+          Matter.Body.applyForce(ball, ball.position, {x:(secureRandom()-0.5)*0.018, y:-0.02});
+        }
+      });
+    });
+  }
+
+  function spawnPinballBalls(participants, winnerIds){
+    var winnerSet = {};
+    winnerIds.forEach(function(id){ winnerSet[id]=true; });
+    var winners = participants.filter(function(v){ return winnerSet[v.id]; });
+    var losers = participants.filter(function(v){ return !winnerSet[v.id]; });
+
+    var corridorIdxs = [];
+    for(var i=0;i<participants.length;i++) corridorIdxs.push(i);
+    var openIdxs = corridorIdxs.filter(function(i){ return pbOpenSet[i]; });
+    var closedIdxs = corridorIdxs.filter(function(i){ return !pbOpenSet[i]; });
+    var openShuffled = shuffleArray(openIdxs);
+    var closedShuffled = shuffleArray(closedIdxs);
+
+    var assignments = {};
+    winners.forEach(function(v, i){ assignments[v.id] = openShuffled[i]; });
+    losers.forEach(function(v, i){ assignments[v.id] = closedShuffled[i]; });
+
+    participants.forEach(function(v){
+      var idx = assignments[v.id];
+      var cx0 = 20 + idx*pbCorridorWidth, cx1 = cx0+pbCorridorWidth;
+      var targetX = (cx0+cx1)/2;
+      var startX = 40 + secureRandom()*(PB_W-80);
+      var ball = Matter.Bodies.circle(startX, 10 + secureRandom()*30, 9, {
+        restitution:0.55, friction:0.02, frictionAir:0.001, label:'ball'
+      });
+      ball.viewerId = v.id;
+      ball.viewerName = v.name;
+      ball.viewerAvatar = v.avatar;
+      ball.isWinner = !!winnerSet[v.id];
+      ball.targetX = targetX;
+      ball.settled = false;
+      Matter.World.add(pbWorld, ball);
+      pbBalls.push(ball);
+    });
+  }
+
+  function drawPinballFrame(){
+    pctx.clearRect(0,0,PB_W,PB_H);
+    pctx.fillStyle = '#0d0b16'; pctx.fillRect(0,0,PB_W,PB_H);
+
+    pbPegs.forEach(function(p){
+      pctx.beginPath();
+      pctx.arc(p.position.x, p.position.y, p.circleRadius, 0, Math.PI*2);
+      pctx.fillStyle = p.label==='bumper' ? '#ff9f1c' : '#3a3358';
+      pctx.fill();
+    });
+
+    for(var ci=0; ci<pbCorridorCount; ci++){
+      var cx0 = 20+ci*pbCorridorWidth;
+      if(pbOpenSet[ci]){
+        pctx.fillStyle = 'rgba(47,230,196,0.12)';
+        pctx.fillRect(cx0+2, PB_TUNNEL_TOP, pbCorridorWidth-4, PB_POCKET_Y-PB_TUNNEL_TOP);
+      }
+    }
+    pctx.fillStyle = '#2a2440';
+    for(var i=0;i<=pbCorridorCount;i++){
+      var dx = 20+i*pbCorridorWidth;
+      pctx.fillRect(dx-2, PB_TUNNEL_TOP, 4, PB_POCKET_Y-PB_TUNNEL_TOP);
+    }
+    pctx.fillStyle = '#4a4560';
+    for(var ci2=0; ci2<pbCorridorCount; ci2++){
+      if(!pbOpenSet[ci2]){
+        var cx0b = 20+ci2*pbCorridorWidth;
+        pctx.fillRect(cx0b+3, PB_FLOOR_Y-5, pbCorridorWidth-6, 10);
+      }
+    }
+    pctx.fillStyle = '#2fe6c4';
+    for(var ci3=0; ci3<pbCorridorCount; ci3++){
+      if(pbOpenSet[ci3]){
+        var cx0c = 20+ci3*pbCorridorWidth;
+        pctx.fillRect(cx0c+3, PB_POCKET_Y-5, pbCorridorWidth-6, 10);
+      }
+    }
+
+    pbBalls.forEach(function(b){
+      var img = getAvatarImg(b.viewerAvatar);
+      pctx.save();
+      pctx.beginPath();
+      pctx.arc(b.position.x, b.position.y, 9, 0, Math.PI*2);
+      if(img && img.complete && img.naturalWidth){
+        pctx.closePath();
+        pctx.clip();
+        pctx.drawImage(img, b.position.x-9, b.position.y-9, 18, 18);
+      }else{
+        pctx.fillStyle = colorForName(b.viewerName);
+        pctx.fill();
+      }
+      pctx.restore();
+      pctx.beginPath();
+      pctx.arc(b.position.x, b.position.y, 9, 0, Math.PI*2);
+      pctx.strokeStyle = (b.settled && b.isWinner) ? '#2fe6c4' : 'rgba(255,255,255,0.4)';
+      pctx.lineWidth = (b.settled && b.isWinner) ? 2.5 : 1;
+      pctx.stroke();
+    });
+  }
+
+  function pinballTick(){
+    Matter.Engine.update(pbEngine, 1000/60);
+    var allSettled = true;
+    pbBalls.forEach(function(b){
+      if(b.settled) return;
+      if(b.position.y > PB_PEG_BOTTOM){
+        var dx = b.targetX - b.position.x;
+        Matter.Body.applyForce(b, b.position, {x: dx*0.00028*b.mass, y:0});
+      }
+      var restY = b.isWinner ? (PB_POCKET_Y - 14) : (PB_FLOOR_Y - 14);
+      if(b.position.y >= restY - 4 && Math.abs(b.velocity.y) < 0.6){
+        b.settled = true;
+      }else{
+        allSettled = false;
+      }
+    });
+    drawPinballFrame();
+    pbFramesRun++;
+    if(!allSettled && pbFramesRun < 900){
+      pbAnimId = requestAnimationFrame(pinballTick);
+    }else{
+      pbBalls.forEach(function(b){ b.settled = true; });
+      drawPinballFrame();
+      finishPinball();
+    }
+  }
+
+  function runPinballLocally(runData){
+    if(!runData) return;
+    var participants = runData.participantIds.map(function(id){
+      var v = state.viewers[id];
+      return v ? {id:id, name:v.name, avatar:v.avatar} : {id:id, name:'???', avatar:null};
+    });
+    pinballStartBtn.classList.add('hidden');
+    pinballNote.textContent = 'Cayendo…';
+    pinballResults.innerHTML = '';
+    pbFramesRun = 0;
+    cancelAnimationFrame(pbAnimId);
+    buildPinballBoard(participants.length, runData.winnerIds.length);
+    spawnPinballBalls(participants, runData.winnerIds);
+    pbAnimId = requestAnimationFrame(pinballTick);
+  }
+
+  function finishPinball(){
+    var pb = state.pinball;
+    if(!pb || !pb.runData) return;
+    showPinballResults(pb.runData.winnerIds, pb.config);
+    if(session && session.role === 'admin' && pb.status !== 'done'){
+      applyMinigameResults(pb.runData.winnerIds, pb.config);
+      rootRef.child('pinball').update({ status:'done' });
+    }
+    pinballNote.textContent = '¡Resultado!';
+  }
+
+  function showPinballResults(winnerIds, config){
+    pinballResults.innerHTML = '';
+    winnerIds.forEach(function(id, i){
+      var v = state.viewers[id];
+      var prize = (config && config.prizes[i]) || 0;
+      var div = document.createElement('div');
+      div.className = 'result-item';
+      div.textContent = '🏆 Top ' + (i+1) + ': ' + (v?v.name:'???') + ' — ' + prize + ' cap(s)';
+      pinballResults.appendChild(div);
+    });
+  }
+
+  pinballStartBtn.addEventListener('click', function(){
+    if(!session || session.role !== 'admin' || !rootRef) return;
+    var pb = state.pinball;
+    if(!pb || pb.status !== 'idle') return;
+    var config = pb.config;
+    var participants = config.eligibleIds.map(function(id){
+      var v = state.viewers[id];
+      return v ? {id:id, name:v.name, avatar:v.avatar} : null;
+    }).filter(Boolean);
+    if(participants.length === 0){ alert('No hay participantes disponibles.'); return; }
+    var n = Math.min(config.winnerCount, participants.length);
+    var shuffledParticipants = shuffleArray(participants);
+    var winnerIds = shuffledParticipants.slice(0, n).map(function(v){ return v.id; });
+    rootRef.child('pinball').update({
+      status: 'running',
+      runData: { participantIds: participants.map(function(v){ return v.id; }), winnerIds: winnerIds }
+    });
+  });
+
+  function renderPinballScreen(){
+    var pb = state.pinball;
+    var isAdmin = session && session.role === 'admin';
+    if(!pb){ pinballNote.textContent=''; return; }
+    pinballStartBtn.classList.toggle('hidden', !isAdmin || pb.status !== 'idle');
+    if(pb.status === 'idle'){
+      pinballNote.textContent = isAdmin ? 'Todo listo. Presiona "Lanzar las bolas" cuando quieras.' : 'Esperando a que el administrador lance las bolas…';
+      pinballResults.innerHTML = '';
+      drawPinballIdlePreview();
+    }else if(pb.status === 'done' && pb.runData){
+      showPinballResults(pb.runData.winnerIds, pb.config);
+      pinballNote.textContent = '¡Resultado!';
+    }
+  }
+
+  // ======================================================================
+  // MINIJUEGO 2: CHAT STOP (los espectadores participan escribiendo)
+  // ======================================================================
+  var csTimerEl = document.getElementById('csTimer');
+  var csChatBox = document.getElementById('csChatBox');
+  var csMessageInput = document.getElementById('csMessageInput');
+  var csSendBtn = document.getElementById('csSendBtn');
+  var csInputRow = document.getElementById('csInputRow');
+  var csSpectatorNote = document.getElementById('csSpectatorNote');
+  var csStartBtn = document.getElementById('csStartBtn');
+  var csResults = document.getElementById('csResults');
+  var csNote = document.getElementById('csNote');
+  var csAdminTickTimer = null;
+
+  function csIsEligible(){
+    if(!session || session.role !== 'viewer') return false;
+    var cs = state.chatstop;
+    if(!cs || !cs.config) return false;
+    return cs.config.eligibleIds.indexOf(session.viewerId) !== -1;
+  }
+
+  function csMessagesArray(){
+    var cs = state.chatstop;
+    if(!cs || !cs.messages) return [];
+    return Object.keys(cs.messages).map(function(k){
+      var m = cs.messages[k];
+      return { viewerId:m.viewerId, name:m.name, text:m.text, at:m.at||0 };
+    }).sort(function(a,b){ return a.at - b.at; });
+  }
+
+  csStartBtn.addEventListener('click', function(){
+    if(!session || session.role !== 'admin' || !rootRef) return;
+    var cs = state.chatstop;
+    if(!cs || cs.status !== 'idle') return;
+    var initialMs = (30 + Math.floor(secureRandom()*150)) * 1000; // 30–180s, no más de 3 min
+    rootRef.child('chatstop').update({ status:'running', remainingMs: initialMs, rateMultiplier: 1, lastTickAt: Date.now() });
+    startCsAdminTick();
+  });
+
+  function startCsAdminTick(){
+    clearInterval(csAdminTickTimer);
+    csAdminTickTimer = setInterval(function(){
+      var cs = state.chatstop;
+      if(!cs || cs.status !== 'running' || !rootRef){ clearInterval(csAdminTickTimer); return; }
+      var rate = cs.rateMultiplier || 1;
+      if(secureRandom() < 0.3){ rate = 0.4 + secureRandom()*2.4; } // la velocidad del conteo cambia al azar
+      var newRemaining = Math.max(0, cs.remainingMs - 1000*rate);
+      state.chatstop.remainingMs = newRemaining;
+      state.chatstop.rateMultiplier = rate;
+      rootRef.child('chatstop').update({ remainingMs:newRemaining, rateMultiplier:rate, lastTickAt: Date.now() });
+      if(newRemaining <= 0){
+        clearInterval(csAdminTickTimer);
+        finishChatStop();
+      }
+    }, 1000);
+  }
+
+  function finishChatStop(){
+    var cs = state.chatstop;
+    if(!cs || !rootRef) return;
+    var msgs = csMessagesArray();
+    var winnerIds = [];
+    for(var i=msgs.length-1; i>=0 && winnerIds.length < cs.config.winnerCount; i--){
+      if(winnerIds.indexOf(msgs[i].viewerId) === -1){ winnerIds.push(msgs[i].viewerId); }
+    }
+    applyMinigameResults(winnerIds, cs.config);
+    rootRef.child('chatstop').update({ status:'done', winnerIds: winnerIds });
+  }
+
+  function csSendMessage(){
+    if(!rootRef || !csIsEligible()) return;
+    var cs = state.chatstop;
+    if(!cs || cs.status !== 'running') return;
+    var text = csMessageInput.value.trim();
+    if(!text) return;
+    var v = state.viewers[session.viewerId];
+    rootRef.child('chatstop/messages').push({ viewerId: session.viewerId, name: v?v.name:'???', text: text, at: Date.now() });
+    csMessageInput.value = '';
+  }
+  csSendBtn.addEventListener('click', csSendMessage);
+  csMessageInput.addEventListener('keydown', function(e){ if(e.key==='Enter'){ csSendMessage(); } });
+
+  function showChatstopResults(winnerIds, config){
+    csResults.innerHTML = '';
+    winnerIds.forEach(function(id,i){
+      var v = state.viewers[id];
+      var prize = (config && config.prizes[i]) || 0;
+      var div = document.createElement('div');
+      div.className='result-item';
+      div.textContent = '🏆 Top '+(i+1)+': '+(v?v.name:'???')+' — '+prize+' cap(s)';
+      csResults.appendChild(div);
+    });
+  }
+
+  function renderChatMessages(){
+    var msgs = csMessagesArray();
+    csChatBox.innerHTML = '';
+    msgs.slice(-100).forEach(function(m){
+      var row = document.createElement('div');
+      row.className = 'cs-msg';
+      row.innerHTML = '<span class="cs-user" style="color:'+colorForName(m.name)+'">'+escapeHtml(m.name)+':</span><span>'+escapeHtml(m.text)+'</span>';
+      csChatBox.appendChild(row);
+    });
+    csChatBox.scrollTop = csChatBox.scrollHeight;
+  }
+
+  function renderChatstopScreen(){
+    var cs = state.chatstop;
+    var isAdmin = session && session.role === 'admin';
+    if(!cs){ csNote.textContent=''; return; }
+
+    csStartBtn.classList.toggle('hidden', !isAdmin || cs.status !== 'idle');
+
+    if(cs.status === 'idle'){
+      csNote.textContent = isAdmin ? 'Presiona "Iniciar cronómetro" cuando todos estén listos.' : 'Esperando a que el administrador inicie el minijuego…';
+      csTimerEl.textContent = '--:--';
+      csResults.innerHTML = '';
+    }else if(cs.status === 'running'){
+      csNote.textContent = '¡Sigan escribiendo!';
+      var secs = Math.max(0, Math.ceil((cs.remainingMs||0)/1000));
+      csTimerEl.textContent = pad2(Math.floor(secs/60))+':'+pad2(secs%60);
+    }else if(cs.status === 'done'){
+      csNote.textContent = '¡Tiempo terminado!';
+      csTimerEl.textContent = '00:00';
+      if(cs.winnerIds){ showChatstopResults(cs.winnerIds, cs.config); }
+    }
+
+    var eligible = csIsEligible();
+    var canType = eligible && cs.status === 'running';
+    var isViewer = session && session.role === 'viewer';
+    csInputRow.classList.toggle('hidden', !isViewer || !eligible);
+    csSpectatorNote.classList.toggle('hidden', !isViewer || eligible);
+    csMessageInput.disabled = !canType;
+    csSendBtn.disabled = !canType;
+
+    renderChatMessages();
+  }
+
+  // ---------------- Render ----------------
+  function currentViewerName(){
+    if(!session || session.role !== 'viewer') return '';
+    var v = state.viewers[session.viewerId];
+    return v ? v.name : '';
+  }
+
+  function renderViewersList(){
+    viewersList.innerHTML = '';
+    var list = viewersArray();
+    var onlineCount = 0;
+    if(list.length === 0){
+      var empty = document.createElement('div');
+      empty.className = 'empty-note';
+      empty.textContent = 'Todavía no hay espectadores agregados.';
+      viewersList.appendChild(empty);
+    }
+    list.forEach(function(v){
+      var online = isViewerOnline(v);
+      if(online) onlineCount++;
+      var li = document.createElement('li');
+      li.className = 'viewer-item';
+
+      var isOwn = !!(session && session.role === 'viewer' && session.viewerId === v.id);
+      var avatarInner = v.avatar
+        ? '<img class="viewer-avatar" src="'+v.avatar+'" alt="">'
+        : '<span class="viewer-avatar-fallback" style="background:'+colorForName(v.name)+'">'+escapeHtml((v.name.trim()[0]||'?').toUpperCase())+'</span>';
+      var editBadge = isOwn ? '<span class="avatar-edit-badge">✎</span>' : '';
+      var avatarHtml = '<span class="viewer-avatar-wrap'+(isOwn?' editable':'')+'" data-viewer-id="'+v.id+'" title="'+(isOwn?'Cambiar tu foto':'')+'">'+avatarInner+editBadge+'</span>';
+
+      var codeHtml = '';
+      var deleteHtml = '';
+      if(session && session.role === 'admin'){
+        var codeText = codesVisible ? escapeHtml(v.code) : '••••••';
+        codeHtml = '<span class="viewer-code mono">'+codeText+'</span>';
+        deleteHtml = '<button class="viewer-delete-btn" type="button" data-viewer-id="'+v.id+'" title="Eliminar espectador">🗑</button>';
+      }
+      li.innerHTML = avatarHtml +
+                      '<span class="status-dot '+(online?'online':'offline')+'"></span>' +
+                      '<span class="viewer-name">'+escapeHtml(v.name)+'</span>' + codeHtml + deleteHtml;
+      viewersList.appendChild(li);
+    });
+    onlineCountEl.textContent = onlineCount + ' de ' + list.length + ' conectados';
+  }
+
+  function render(){
+    session = getSession();
+
+    if(!isConfigured()){
+      setupScreen.classList.remove('hidden');
+      lockScreen.classList.add('hidden');
+      app.classList.add('hidden');
+      return;
+    }
+    setupScreen.classList.add('hidden');
+
+    if(!session){
+      lockScreen.classList.remove('hidden');
+      app.classList.add('hidden');
+      return;
+    }
+    lockScreen.classList.add('hidden');
+    app.classList.remove('hidden');
+
+    var isAdmin = session.role === 'admin';
+    var currentView = state.currentView || 'raffle';
+
+    addUserBtn.classList.toggle('hidden', !isAdmin || currentView !== 'raffle');
+    toggleCodesBtn.classList.toggle('hidden', !isAdmin || currentView !== 'raffle');
+    toggleCodesBtn.textContent = codesVisible ? 'Ocultar códigos' : 'Mostrar códigos';
+    minigamesNavBtn.classList.toggle('hidden', !isAdmin);
+    minigamesNavBtn.textContent = currentView === 'raffle' ? '🎮 Minijuegos' : '← Volver al sorteo';
+
+    adminWheelControls.classList.toggle('hidden', !isAdmin);
+    viewerWheelNote.classList.toggle('hidden', isAdmin);
+    capsInput.disabled = !isAdmin;
+    capsInput.value = state.capsCount;
+
+    roleBadge.textContent = isAdmin ? 'Administrador' : ('Espectador · ' + currentViewerName());
+    roleBadge.className = 'role-badge ' + (isAdmin ? 'admin' : 'viewer');
+    document.getElementById('headerSub').textContent = isAdmin ? 'Estás controlando el sorteo' : 'Modo espectador · solo lectura';
+
+    if(currentView !== lastViewSeen){
+      switchView(currentView);
+      lastViewSeen = currentView;
+    }
+
+    if(currentView === 'raffle'){
+      renderViewersList();
+      if(state.draw && state.draw.status === 'spinning'){
+        spinBtn.disabled = true;
+        var poolNames = namesForIds(currentPoolIds());
+        drawWheel(poolNames, currentRotation);
+      }else{
+        spinBtn.disabled = false;
+        drawWheel(viewersArray().map(function(v){ return v.name; }), currentRotation);
+      }
+    }else if(currentView === 'minigames_hub'){
+      renderMinigamesHub();
+    }else if(currentView === 'pinball'){
+      renderPinballScreen();
+    }else if(currentView === 'chatstop'){
+      renderChatstopScreen();
+    }
+  }
+
+  // ---------------- Init ----------------
+  render();
+  initFirebase();
+})();
+</script>
+</body>
+</html>
